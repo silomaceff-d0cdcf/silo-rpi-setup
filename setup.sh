@@ -98,6 +98,32 @@ fi
 source ~/.bash_init.sh
 echo "  Done."
 
+# --- Phase 5b: Desktop wallpaper ---
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WALLPAPER="$SCRIPT_DIR/artwork/SILO_at_night.png"
+if [ -f "$WALLPAPER" ]; then
+    mkdir -p ~/Pictures
+    cp "$WALLPAPER" ~/Pictures/SILO_at_night.png
+    # Set wallpaper via pcmanfm config (labwc desktop manager)
+    PCMANFM_DIR="$HOME/.config/pcmanfm/LXDE-pi"
+    mkdir -p "$PCMANFM_DIR"
+    for conf in "$PCMANFM_DIR"/desktop-items-*.conf; do
+        if [ -f "$conf" ]; then
+            sed -i "s|^wallpaper=.*|wallpaper=$HOME/Pictures/SILO_at_night.png|" "$conf"
+            sed -i "s|^wallpaper_mode=.*|wallpaper_mode=crop|" "$conf"
+        fi
+    done
+    # Create default config if none exists
+    if [ ! -f "$PCMANFM_DIR/desktop-items-HDMI-A-1.conf" ]; then
+        cat > "$PCMANFM_DIR/desktop-items-HDMI-A-1.conf" << WPEOF
+[*]
+wallpaper=$HOME/Pictures/SILO_at_night.png
+wallpaper_mode=crop
+WPEOF
+    fi
+    echo "  Desktop wallpaper set (SILO at Night)"
+fi
+
 # --- Phase 6: MacEff framework install ---
 echo "[6/7] Installing MacEff framework..."
 macf_tools hooks install --global 2>&1 | tail -1

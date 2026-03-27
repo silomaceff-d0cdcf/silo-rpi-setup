@@ -1,5 +1,9 @@
 # SILO RPi Setup
 
+![SILO at Night](artwork/SILO_at_night.png)
+
+*"SILO at Night" — AI-generated artwork by @cversek using [ChatGPT 5.4 image generation](https://chatgpt.com/share/69c5fbea-671c-832f-b879-79fa54d0b6b1). Radical openness: source prompts and method linked.*
+
 > **Developer Preview** — This project is for research and educational purposes. It has not been formally audited for security. See [SECURITY.md](SECURITY.md) for risks, OPSEC guidance, and indemnification. Licensed under [MIT](LICENSE).
 
 **Batteries-included setup for a [MacEff](https://github.com/cversek/MacEff) AI agent on Raspberry Pi 500.**

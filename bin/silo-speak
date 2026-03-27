@@ -1,0 +1,119 @@
+#!/bin/bash
+# silo-speak — Text-to-speech for SILO farm automation.
+#
+# Usage:
+#   silo-speak "text to speak"                  # Speak with active voice
+#   silo-speak "text" --voice amy               # Use specific voice
+#   silo-speak "text" --output /tmp/out.wav     # Save to file instead of stdout
+#   silo-speak "text" --ogg /tmp/out.ogg        # Save as OGG/Opus (for Telegram)
+#   silo-speak --list-voices                    # List available voices
+#   silo-speak --show-voice                     # Show active voice
+#   silo-speak --set-voice ryan                 # Switch active voice
+#
+# Voice profiles: ~/.config/silo/tts/voices/
+# Active voice:   ~/.config/silo/tts/voices/active.onnx (symlink)
+# Piper models:   ~/.local/share/piper/
+#
+# SiloMacEff@d0cdcf (working with @cversek)
+
+PIPER="$HOME/.local/share/piper/piper/piper"
+MODELS_DIR="$HOME/.local/share/piper"
+VOICES_DIR="$HOME/.config/silo/tts/voices"
+ACTIVE_MODEL="$VOICES_DIR/active.onnx"
+
+list_voices() {
+    local active_target=""
+    if [ -L "$ACTIVE_MODEL" ]; then
+        active_target=$(readlink -f "$ACTIVE_MODEL")
+    fi
+    echo "Available voices:"
+    for f in "$MODELS_DIR"/en_US-*-medium.onnx; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f" | sed 's/en_US-//;s/-medium\.onnx//')
+        marker=""
+        if [ "$(readlink -f "$f")" = "$active_target" ]; then
+            marker=" *"
+        fi
+        echo "  ${name}${marker}"
+    done
+    if [ -n "$active_target" ]; then
+        active_name=$(basename "$active_target" | sed 's/en_US-//;s/-medium\.onnx//')
+        echo ""
+        echo "Active: $active_name"
+    fi
+}
+
+show_voice() {
+    if [ -L "$ACTIVE_MODEL" ]; then
+        target=$(readlink -f "$ACTIVE_MODEL")
+        name=$(basename "$target" | sed 's/en_US-//;s/-medium\.onnx//')
+        echo "Active voice: $name"
+        echo "Model: $target"
+    else
+        echo "No active voice set."
+    fi
+}
+
+set_voice() {
+    local name="$1"
+    local model="$MODELS_DIR/en_US-${name}-medium.onnx"
+    local config="$MODELS_DIR/en_US-${name}-medium.onnx.json"
+    if [ ! -f "$model" ]; then
+        echo "Voice '$name' not found. Available:"
+        list_voices
+        exit 1
+    fi
+    mkdir -p "$VOICES_DIR"
+    ln -sf "$model" "$ACTIVE_MODEL"
+    ln -sf "$config" "$VOICES_DIR/active.onnx.json"
+    echo "Active voice → $name"
+}
+
+speak() {
+    local text="$1"
+    local voice=""
+    local output=""
+    local ogg=""
+    shift
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --voice) voice="$2"; shift 2;;
+            --output) output="$2"; shift 2;;
+            --ogg) ogg="$2"; shift 2;;
+            *) shift;;
+        esac
+    done
+
+    local model="$ACTIVE_MODEL"
+    if [ -n "$voice" ]; then
+        model="$MODELS_DIR/en_US-${voice}-medium.onnx"
+        if [ ! -f "$model" ]; then
+            echo "Voice '$voice' not found." >&2
+            exit 1
+        fi
+    fi
+
+    if [ -n "$ogg" ]; then
+        # Generate WAV to temp, convert to OGG
+        local tmpwav=$(mktemp /tmp/silo_speak_XXXXXX.wav)
+        echo "$text" | "$PIPER" --model "$model" --output_file "$tmpwav" 2>/dev/null
+        ffmpeg -y -i "$tmpwav" -c:a libopus "$ogg" 2>/dev/null
+        rm -f "$tmpwav"
+        echo "$ogg"
+    elif [ -n "$output" ]; then
+        echo "$text" | "$PIPER" --model "$model" --output_file "$output" 2>/dev/null
+        echo "$output"
+    else
+        # Output WAV to stdout
+        echo "$text" | "$PIPER" --model "$model" --output_raw 2>/dev/null
+    fi
+}
+
+case "${1:-}" in
+    --list-voices) list_voices;;
+    --show-voice) show_voice;;
+    --set-voice) set_voice "$2";;
+    -h|--help) head -14 "$0" | tail -13;;
+    "") echo "Usage: silo-speak \"text\" [--voice NAME] [--output file.wav] [--ogg file.ogg]"; echo "       silo-speak --list-voices | --show-voice | --set-voice NAME";;
+    *) speak "$@";;
+esac

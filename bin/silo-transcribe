@@ -1,0 +1,148 @@
+#!/usr/bin/env /home/silo/.venvs/whisper/bin/python3
+"""
+silo-transcribe — Voice-to-text for SILO farm automation.
+
+Usage:
+  silo-transcribe <audio_file>              # Transcribe with active context
+  silo-transcribe <audio_file> --context X  # Use specific context profile
+  silo-transcribe --list-contexts           # List available profiles
+  silo-transcribe --show-context            # Show active context prompt
+  silo-transcribe --set-context X           # Switch active profile
+
+Context profiles: ~/.config/silo/whisper/contexts/*.txt
+Active profile:   ~/.config/silo/whisper/active_context.txt (symlink)
+
+SiloMacEff@d0cdcf (working with @cversek)
+"""
+
+import sys
+import os
+import time
+import subprocess
+import resource
+from pathlib import Path
+
+CONTEXTS_DIR = Path.home() / ".config/silo/whisper/contexts"
+ACTIVE_LINK = Path.home() / ".config/silo/whisper/active_context.txt"
+MODEL_NAME = "tiny.en"
+
+
+def list_contexts():
+    active = ACTIVE_LINK.resolve().name if ACTIVE_LINK.exists() else "(none)"
+    for f in sorted(CONTEXTS_DIR.glob("*.txt")):
+        marker = " *" if f.name == active else ""
+        print(f"  {f.stem}{marker}")
+    print(f"\nActive: {active}")
+
+
+def show_context():
+    if ACTIVE_LINK.exists():
+        print(f"Profile: {ACTIVE_LINK.resolve().name}")
+        print(f"---")
+        print(ACTIVE_LINK.read_text())
+    else:
+        print("No active context set.")
+
+
+def set_context(name):
+    target = CONTEXTS_DIR / f"{name}.txt"
+    if not target.exists():
+        print(f"Context '{name}' not found. Available:")
+        list_contexts()
+        sys.exit(1)
+    ACTIVE_LINK.unlink(missing_ok=True)
+    ACTIVE_LINK.symlink_to(target)
+    print(f"Active context → {name}.txt")
+
+
+def transcribe(audio_path, context_name=None):
+    audio = Path(audio_path)
+    if not audio.exists():
+        print(f"File not found: {audio_path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Load context prompt
+    if context_name:
+        ctx_file = CONTEXTS_DIR / f"{context_name}.txt"
+    elif ACTIVE_LINK.exists():
+        ctx_file = ACTIVE_LINK
+    else:
+        ctx_file = None
+
+    initial_prompt = ctx_file.read_text().strip() if ctx_file and ctx_file.exists() else ""
+
+    # Convert to WAV if needed
+    wav_path = Path("/tmp/silo_transcribe.wav")
+    if audio.suffix.lower() in (".oga", ".ogg", ".opus", ".mp3", ".m4a", ".webm"):
+        t0 = time.time()
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(audio), "-ar", "16000", "-ac", "1", "-f", "wav", str(wav_path)],
+            capture_output=True
+        )
+        convert_time = time.time() - t0
+    else:
+        wav_path = audio
+        convert_time = 0
+
+    # Get audio duration
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", str(audio)],
+            capture_output=True, text=True
+        )
+        duration = float(result.stdout.strip())
+    except (ValueError, Exception):
+        duration = 0
+
+    # Load model and transcribe
+    from pywhispercpp.model import Model
+
+    mem_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    t_start = time.time()
+    model = Model(MODEL_NAME)
+    t_loaded = time.time()
+
+    kwargs = {}
+    if initial_prompt:
+        kwargs["initial_prompt"] = initial_prompt
+
+    segments = model.transcribe(str(wav_path), **kwargs)
+    t_done = time.time()
+    mem_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+    # Output
+    full_text = " ".join(s.text.strip() for s in segments)
+
+    print(f"=== SILO TRANSCRIPTION ===")
+    print(f"Audio:     {audio.name} ({duration:.1f}s)")
+    print(f"Model:     {MODEL_NAME}")
+    print(f"Context:   {ctx_file.resolve().stem if ctx_file else '(none)'}")
+    print(f"Convert:   {convert_time*1000:.0f}ms")
+    print(f"Load:      {t_loaded - t_start:.1f}s")
+    print(f"Transcribe:{t_done - t_loaded:.1f}s")
+    print(f"RTF:       {(t_done - t_loaded)/duration:.2f}x" if duration else "RTF: N/A")
+    print(f"RAM:       {mem_after // 1024} MB")
+    print(f"---")
+    print(full_text)
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+
+    if not args or "--help" in args or "-h" in args:
+        print(__doc__)
+        sys.exit(0)
+    elif "--list-contexts" in args:
+        list_contexts()
+    elif "--show-context" in args:
+        show_context()
+    elif "--set-context" in args:
+        idx = args.index("--set-context")
+        set_context(args[idx + 1])
+    else:
+        audio = args[0]
+        context = None
+        if "--context" in args:
+            idx = args.index("--context")
+            context = args[idx + 1]
+        transcribe(audio, context)

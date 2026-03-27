@@ -1,6 +1,8 @@
 # SILO RPi Setup
 
-**Batteries-included setup for a MacEff AI agent on Raspberry Pi 500.**
+> **Developer Preview** — This project is for research and educational purposes. It has not been formally audited for security. See [SECURITY.md](SECURITY.md) for risks, OPSEC guidance, and indemnification. Licensed under [MIT](LICENSE).
+
+**Batteries-included setup for a [MacEff](https://github.com/cversek/MacEff) AI agent on Raspberry Pi 500.**
 
 Turn a fresh Raspberry Pi into a farm automation assistant with voice input/output and Telegram remote control — in under 30 minutes.
 
@@ -178,6 +180,22 @@ Voice models at `~/.local/share/piper/`. Browse more at [rhasspy/piper-voices](h
 
 For the full first-principles tutorial explaining every step and why, see:
 [rpi500_silo_setup.md](https://gist.github.com/silomaceff/35e730e5dd03060b01561b7a9dcaa0bf)
+
+## Introducing Your Agent
+
+After technical setup, your agent needs context: who you are, what the project is, and who you work with. This is the most important step — a well-introduced agent is dramatically more useful.
+
+See **[AGENT_INTRODUCTION_GUIDE.md](AGENT_INTRODUCTION_GUIDE.md)** for a complete walkthrough with templates and examples.
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [README.md](README.md) | Quick start (this file) |
+| [AGENT_INTRODUCTION_GUIDE.md](AGENT_INTRODUCTION_GUIDE.md) | How to seed agent memory with your context |
+| [SECURITY.md](SECURITY.md) | OPSEC warnings, risks, indemnification |
+| [Deep-dive tutorial](https://gist.github.com/silomaceff/35e730e5dd03060b01561b7a9dcaa0bf) | First-principles walkthrough explaining every step |
+| [LICENSE](LICENSE) | MIT License |
 
 ## About
 
